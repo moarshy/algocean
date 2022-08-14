@@ -15,5 +15,12 @@ RUN pip install -r requirements.txt
 # add BITTENSOR commune fork
 ADD ./ocean.py /app/ocean.py
 RUN pip install -e ./ocean.py
-RUN pip install diffusers
+
+# add ipfspy commune fork
+ADD ./ipfspy /app/ipfspy
+RUN pip install -e ./ipfspy
+
+# add ipfsspec commune fork
+ADD ./ipfsspec /app/ipfsspec
+RUN pip install -e ./ipfsspec
 

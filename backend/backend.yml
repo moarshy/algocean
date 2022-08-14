@@ -1,0 +1,39 @@
+version: '3'
+services:
+  backend:
+    image: algocean/backend
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    ports:
+      - 8501:8501 # for the user streamlit app
+      - 8265:8265
+      - 8000:8000
+      - 8001:8001
+      - 7860-7865:7860-7865
+      
+    volumes:
+      - ./:/app
+      - ./ocean.py/ocean_lib:/app/ocean.py/ocean_lib
+    networks:
+      backend:
+        ipv4_address: 172.15.0.9
+
+    # env_file: 
+    #   - .env
+    # deploy:
+    #   resources:
+    #      reservations:
+    #        devices:
+    #        - driver: nvidia
+    #          count: 'all'
+    #          capabilities: [gpu]
+    command: bash -c "tail -F anything;"
+
+networks:
+  backend:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.15.0.1/24

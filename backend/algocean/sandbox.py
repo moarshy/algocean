@@ -13,6 +13,8 @@ from ocean_lib.web3_internal.constants import ZERO_ADDRESS
 class OceanModule:
     default_wallet_key = 'default'
     wallets = {}
+    data_nfts = {}
+    data_tokens = {}
     pkhash2wallet = {}
 
 

@@ -1,8 +1,8 @@
 down:
 	docker kill $(docker ps --filter "name=ocean" -q)
+	
 start:
 	./start.sh
-
 
 restart:
 	docker kill $(docker ps --filter "name=ocean" -q); ./start.sh;

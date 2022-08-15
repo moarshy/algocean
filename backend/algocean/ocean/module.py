@@ -12,6 +12,8 @@ from ocean_lib.example_config import ExampleConfig
 from ocean_lib.web3_internal.contract_base import ContractBase
 from ocean_lib.models.datatoken import Datatoken
 from ocean_lib.ocean.ocean import Ocean
+from ocean_lib.structures.file_objects import IpfsFile, UrlFile
+
 from typing import *
 # Create Alice's wallet
 
@@ -177,6 +179,7 @@ class OceanModule:
     def get_address(self, contract):
         return contract.address
 
+
     def load(self):
         self.load_state()
         # some loading post processing
@@ -184,6 +187,8 @@ class OceanModule:
             self.data_nfts[k] = self.get_contract(address=v, contract_class=DataNFT)
         for k,v in self.data_tokens.items():
             self.data_tokens[k] = self.get_contract(address=v, contract_class=Datatoken)
+        for k,v in self.data_assets.items():
+            self.data_assets[k] = Asset.from_dict(v)
 
 
     def load_state(self):
@@ -194,7 +199,13 @@ class OceanModule:
                 data = v.get('default', data)
             self.__dict__[k] = data
 
+    # @staticmethod
+    # def get_asset_did(asset:Asset):
+    #     return asset.did
 
+    # @staticmethod
+    # def get_asset(did:int) -> Asset:
+    #     return Asset(did=did)
 
     def save(self):
         # some loading post processing
@@ -202,6 +213,9 @@ class OceanModule:
             self.data_nfts[k] = self.get_address(contract=v)
         for k,v in self.data_tokens.items():
             self.data_tokens[k] = self.get_address(contract=v)
+        for k,v in self.data_assets.items():
+            self.data_assets[k] = v.as_dictionary()
+
 
         self.save_state()
 
@@ -221,12 +235,20 @@ class OceanModule:
         return kwargs
 
 
-    def tokens_from_nft(self, nft_symbol):
+    def list_data_tokens(self, nft_symbol=None, return_keys=False):
+        
         output_data_tokens = {}
-        for k,v in self.data_tokens.items():
-            k_nft,k_token = k.split('.')
-            if nft_symbol == k_nft:
-                output_data_tokens[k_token] = v
+        
+        if nft_symbol == None:
+            output_data_tokens =  list(self.data_tokens.keys())
+        else:
+            for k,v in self.data_tokens.items():
+                k_nft,k_token = k.split('.')
+                if nft_symbol == k_nft:
+                    output_data_tokens[k_token] = v
+
+        if return_keys:
+            return list(output_data_tokens.keys())
         return output_data_tokens
 
 
@@ -240,7 +262,7 @@ class OceanModule:
 
 
         if key in self.data_assets:
-            return Asset(did=self.data_assets[key])
+            return self.data_assets[key]
         
         if data_nft_address == None :
             data_nft = self.data_nfts[data_nft_symbol]
@@ -252,7 +274,7 @@ class OceanModule:
         if deployed_datatokens != None:
             if isinstance(deployed_datatokens, str):
                 deployed_datatokens = [deployed_datatokens]
-            data_token_map = self.tokens_from_nft(data_nft_symbol)
+            data_token_map = self.list_data_tokens(data_nft_symbol)
             assert isinstance(deployed_datatokens, list)
             for i, deployed_datatoken in enumerate(deployed_datatokens):
                 if isinstance(deployed_datatoken, str):
@@ -279,9 +301,31 @@ class OceanModule:
 
 
         asset = self.ocean.assets.create(**kwargs)
-        self.data_assets[key] = asset.did
+        self.data_assets[key] = asset
 
         return asset
+
+    def list_data_assets(self):
+        return list(self.data_assets.keys())
+    
+    @staticmethod
+    def get_file_obj(file_obj:dict, file_type:str=None):
+        file_type_options = ['url', 'ipfs'] 
+        file_obj['type'] = file_obj.get('type', file_type)
+        
+        assert file_obj['type']  in file_type_options
+
+        """Factory Method"""
+        if file_obj["type"] == "url":
+            return UrlFile(
+                file_obj["url"],
+                method=file_obj.get("method", "GET"),
+                headers=file_obj.get("headers"),
+            )
+        elif file_obj["type"] == "ipfs":
+            return IpfsFile(file_obj["hash"])
+        else:
+            raise Exception("Unrecognized file type")
 
     
 module = OceanModule()
@@ -293,7 +337,6 @@ module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
 module.create_data_nft(name='DataNFT1', symbol='NFT1')
 module.create_datatoken(name='DataToken1', symbol='DT1', data_nft='NFT1')
 
-st.write(module.data_tokens, module.data_nfts)
 
 # st.write(module.data_nfts)
 
@@ -313,10 +356,7 @@ metadata = {
     "author": "Trent",
     "license": "CC0: PublicDomain",
 }
-
-url_file = UrlFile(
-    url="https://raw.githubusercontent.com/trentmc/branin/main/branin.arff"
-)
+url_file = module.get_file_obj(dict(url="https://raw.githubusercontent.com/trentmc/branin/main/branin.arff", type='url'))
 
 asset = module.create_asset(
     metadata=metadata,
@@ -325,7 +365,6 @@ asset = module.create_asset(
     deployed_datatokens=["DT1"]
 )
 
-st.write(Asset(did=asset.did).did)
-
+st.write(asset.services[0].__dict__)
 
 module.save()

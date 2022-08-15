@@ -74,13 +74,20 @@ class OceanModule:
         existing_wallet_key = self.get_existing_wallet_key(private_key=private_key)
         # if the key is registered, then we will swtich the old key with the new key
         if existing_wallet_key == None:
-            self.wallets[wallet_key] = Wallet(web3=self.web3, private_key=private_key, block_confirmations=self.config['ocean'].block_confirmations, transaction_timeout=self.config['ocean'].transaction_timeout)  
+            self.wallets[wallet_key] = self.generate_wallet(private_key=private_key)
         else:
             self.wallets[wallet_key] =  self.wallets.pop(existing_wallet_key)
 
         self.ensure_default_wallet()
         return self.wallets[wallet_key]
 
+    def generate_wallet(self, private_key:str):
+        private_key = os.getenv(private_key, private_key)
+        return Wallet(web3=self.web3, 
+                      private_key=private_key, 
+                      block_confirmations=self.config['ocean'].block_confirmations, 
+                      transaction_timeout=self.config['ocean'].transaction_timeout)  
+    
     def rm_wallet(self, key):
         '''
         remove wallet and all data relating to it
@@ -88,11 +95,11 @@ class OceanModule:
         del self.wallets[key]
         self.ensure_default_wallet()
 
-    def list_wallets(self, keys_only=True):
+    def list_wallets(self, return_keys=True):
         '''
         list wallets
         '''
-        if keys_only:
+        if return_keys:
             return list(self.wallets.keys())
         else:
             return  [(k,v) for k,v in self.wallets.items()]
@@ -108,10 +115,9 @@ class OceanModule:
         # gets the default wallet
         return self.wallets[self.default_wallet_key]
 
-    def set_default_wallet(self, key):
-
+    def set_default_wallet(self, key:str):
         self.default_wallet_key = key
-        return self.default_wallet_key
+        return self.wallets[self.default_wallet_key]
 
     def ensure_default_wallet(self):
         if self.default_wallet_key not in self.wallets:
@@ -203,9 +209,11 @@ class OceanModule:
     # def get_asset_did(asset:Asset):
     #     return asset.did
 
-    # @staticmethod
-    # def get_asset(did:int) -> Asset:
-    #     return Asset(did=did)
+    def get_asset(self, did:str=None, data_nft:str=None) -> Asset:
+        if did != None:
+            return Asset(did=did)
+        elif data_nft != None:
+            return self.data_assets[data_nft]
 
     def save(self):
         # some loading post processing
@@ -235,16 +243,22 @@ class OceanModule:
         return kwargs
 
 
-    def list_data_tokens(self, nft_symbol=None, return_keys=False):
+    def list_data_tokens(self, data_nft=None, return_keys=False):
         
         output_data_tokens = {}
+
         
-        if nft_symbol == None:
-            output_data_tokens =  list(self.data_tokens.keys())
+        if data_nft == None:
+            output_data_tokens =  self.data_tokens
         else:
+
+            if isinstance(data_nft, DataNFT):
+                target_key = data_nft.symbol()
+            else:
+                target_key = data_nft
             for k,v in self.data_tokens.items():
                 k_nft,k_token = k.split('.')
-                if nft_symbol == k_nft:
+                if target_key == k_nft:
                     output_data_tokens[k_token] = v
 
         if return_keys:
@@ -252,36 +266,36 @@ class OceanModule:
         return output_data_tokens
 
 
-    def create_asset(self, **kwargs ):
+    def get_datanft(self, data_nft):
+        '''
+        dataNFT can be address, key in self.data_nfts or a DataNFT
+        '''
+        if isinstance(data_nft, str):
+            if data_nft in self.data_nfts :
+                data_nft = self.data_nfts[data_nft]
+            else:
+                data_nft = DataNFT(address=data_nft)
+        
+        assert isinstance(data_nft, DataNFT), f'data_nft should be in the formate of DataNFT, not {data_nft}'
+        
+        return data_nft
 
+    def create_asset(self,data_nft, data_token, **kwargs ):
 
-        data_nft_symbol = kwargs.get('data_nft_symbol')
-        data_nft_address = kwargs.get('data_nft_address')
+        data_nft = self.get_datanft(data_nft=data_nft)
+
+        data_nft_symbol = data_nft.symbol()
+        data_nft_address = data_nft.address
+
+        st.write(data_nft_symbol)
 
         key = data_nft_symbol
-
 
         if key in self.data_assets:
             return self.data_assets[key]
         
-        if data_nft_address == None :
-            data_nft = self.data_nfts[data_nft_symbol]
-            data_nft_address = data_nft.address
-
-
-        deployed_datatokens = kwargs.get('deployed_datatokens')
-
-        if deployed_datatokens != None:
-            if isinstance(deployed_datatokens, str):
-                deployed_datatokens = [deployed_datatokens]
-            data_token_map = self.list_data_tokens(data_nft_symbol)
-            assert isinstance(deployed_datatokens, list)
-            for i, deployed_datatoken in enumerate(deployed_datatokens):
-                if isinstance(deployed_datatoken, str):
-                    deployed_datatokens[i] = data_token_map[deployed_datatoken]
-                elif isinstance(deployed_datatoken, Datatoken):
-                    pass
-
+        data_token = self.get_datatoken(data_nft=data_nft_symbol, data_token=data_token)
+        deployed_datatokens = [data_token]
 
         default_kwargs= dict(
         data_nft_address = data_nft_address,
@@ -305,8 +319,14 @@ class OceanModule:
 
         return asset
 
-    def list_data_assets(self):
-        return list(self.data_assets.keys())
+    def list_data_assets(self, return_did=False):
+
+        if return_did:
+            # return dids
+            return {k:v.did for k,v in self.data_assets.items()}
+        else:
+            # return keys only
+            return list(self.data_assets.keys())
     
     @staticmethod
     def get_file_obj(file_obj:dict, file_type:str=None):
@@ -327,10 +347,65 @@ class OceanModule:
         else:
             raise Exception("Unrecognized file type")
 
+
+    def mint(self, account_address:str, value:int=1,data_nft:str=None, data_token:str=None, token_address:str=None, wallet:Wallet=None , encode_value=True):
+        wallet = self.ensure_wallet(wallet=wallet)
+        if encode_value:
+            value = self.ocean.to_wei(str(value))
+        datatoken = self.get_datatoken(data_nft=data_nft,data_token=data_token, address=token_address)
+        
+        assert datatoken != None, f'data_token is None my guy, args: {dict(data_nft=data_nft, data_token=data_token, token_address=token_address)}'
+        datatoken.mint(account_address=account_address, 
+                        value=value, from_wallet=wallet )
+
+
+    def get_datatoken(self, address:str=None, data_nft:str=None, data_token:str=None) -> Datatoken:
+        
+        if isinstance(data_token, Datatoken):
+            return data_token
+        elif address != None:
+            return self.ocean.get_datatoken(address)
+
+        elif data_nft != None or data_token != None:
+            data_tokens_map = self.list_data_tokens(data_nft=data_nft)
+            if data_token in data_tokens_map:
+                return data_tokens_map[data_token]
+
+        return None
+
+    def resolve_account(self, account:Union[Wallet, str], return_address=False):
+        '''
+        resolves the account to default wallet if account is None
+        '''
+        
+        account = self.wallet if account == None else account
+
+        if return_address:
+            if isinstance(account, Wallet):
+                account = account.address
+            assert isinstance(account, str)
+        else:
+            assert isinstance(account, Wallet)
+        
+        return account
+    def get_balance(self,account:Union[Wallet,str]=None, data_nft:str=None, data_token:str=None, token_address:str=None):
+        
+        account_address = self.resolve_account(account=account, return_address=True)
+
+        data_token = self.get_datatoken(data_nft=data_nft, data_token=data_token, address=token_address)
+        if data_token == None:
+            return self.web3.eth.get_balance(account_address)
+        else:
+            return data_token.balanceOf(account_address)
+        
+
+        
+        
+        
     
 module = OceanModule()
 
-module.load()
+# module.load()
 
 
 module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
@@ -361,10 +436,54 @@ url_file = module.get_file_obj(dict(url="https://raw.githubusercontent.com/trent
 asset = module.create_asset(
     metadata=metadata,
     files=[url_file],
-    data_nft_symbol='NFT1',
-    deployed_datatokens=["DT1"]
+    data_nft='NFT1',
+    data_token="DT1"
 )
 
-st.write(asset.services[0].__dict__)
 
-module.save()
+# Initialize Bob's wallet
+bob_wallet = module.generate_wallet(private_key='TEST_PRIVATE_KEY2')
+print(f"bob_wallet.address = '{bob_wallet.address}'")
+
+# Alice mints a datatoken into Bob's wallet
+module.mint(
+    data_token='NFT1.DT1',
+    account_address=bob_wallet.address,
+    value=50
+)
+
+st.write(module.get_balance(data_token='NFT1.DT1', account=bob_wallet.address))
+
+
+# Verify that Bob has ganache ETH
+module.get_balance(account=bob_wallet.address) > 0, "need ganache ETH"
+
+# Bob points to the service object
+
+# fee_receiver = ZERO_ADDRESS  # could also be market address
+# service = asset.services[0]
+
+# # Bob sends his datatoken to the service
+# order_tx_id = module.ocean.assets.pay_for_access_service(
+#     asset=asset,
+#     service=service,
+#     consume_market_order_fee_address=bob_wallet.address,
+#     consume_market_order_fee_token=datatoken.address,
+#     consume_market_order_fee_amount=0,
+#     wallet=bob_wallet,
+# )
+# print(f"order_tx_id = '{order_tx_id}'")
+
+# # Bob downloads. If the connection breaks, Bob can request again by showing order_tx_id.
+# file_path = module.ocean.assets.download_asset(
+#     asset=asset,
+#     service=service,
+#     consumer_wallet=bob_wallet,
+#     destination='./',
+#     order_tx_id=order_tx_id
+# )
+# print(f"file_path = '{file_path}'")
+
+# st.write(asset.services[0].__dict__)
+
+# module.save()

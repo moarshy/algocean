@@ -17,6 +17,13 @@ save:
     params:
       path: 'tmp/algocean/data_tokens.json'
 
+  data_assets:
+    module: local
+    fn: put_object
+    params:
+      path: 'tmp/algocean/data_assets.json'
+      
+    default: {}
 load:
   data_nfts:
     module: local
@@ -31,5 +38,13 @@ load:
     fn: get_object
     params:
       path: 'tmp/algocean/data_tokens.json'
+      
+    default: {}
+
+  data_assets:
+    module: local
+    fn: get_object
+    params:
+      path: 'tmp/algocean/data_assets.json'
       
     default: {}

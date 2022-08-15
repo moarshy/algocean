@@ -7,6 +7,7 @@ from algocean.utils import RecursiveNamespace, dict_put, dict_has
 from algocean.client import ClientModule
 from algocean.config.loader import ConfigLoader
 
+from ocean_lib.assets.asset import Asset
 from ocean_lib.example_config import ExampleConfig
 from ocean_lib.web3_internal.contract_base import ContractBase
 from ocean_lib.models.datatoken import Datatoken
@@ -19,6 +20,8 @@ from ocean_lib.web3_internal.wallet import Wallet
 from ocean_lib.web3_internal.constants import ZERO_ADDRESS
 import fsspec
 
+from ocean_lib.structures.file_objects import UrlFile
+
 
 
 class OceanModule:
@@ -30,6 +33,7 @@ class OceanModule:
     def __init__(self, config=None):
         self.data_nfts = {}
         self.data_tokens = {}
+        self.data_assets = {}
         
         self.client = self.get_clients()
         self.config = self.get_config(config=config)
@@ -208,21 +212,120 @@ class OceanModule:
             save_fn = getattr(getattr(self.client, v['module']), v['fn'])
             save_fn(**v['params'], data=data)
 
+    @staticmethod
+    def fill_default_kwargs(default_kwargs, kwargs):
+        for k,v in default_kwargs.items():
+            if kwargs.get(k) == None:
+                kwargs[k] = default_kwargs[k]
+
+        return kwargs
+
+
+    def tokens_from_nft(self, nft_symbol):
+        output_data_tokens = {}
+        for k,v in self.data_tokens.items():
+            k_nft,k_token = k.split('.')
+            if nft_symbol == k_nft:
+                output_data_tokens[k_token] = v
+        return output_data_tokens
+
+
+    def create_asset(self, **kwargs ):
+
+
+        data_nft_symbol = kwargs.get('data_nft_symbol')
+        data_nft_address = kwargs.get('data_nft_address')
+
+        key = data_nft_symbol
+
+
+        if key in self.data_assets:
+            return Asset(did=self.data_assets[key])
+        
+        if data_nft_address == None :
+            data_nft = self.data_nfts[data_nft_symbol]
+            data_nft_address = data_nft.address
+
+
+        deployed_datatokens = kwargs.get('deployed_datatokens')
+
+        if deployed_datatokens != None:
+            if isinstance(deployed_datatokens, str):
+                deployed_datatokens = [deployed_datatokens]
+            data_token_map = self.tokens_from_nft(data_nft_symbol)
+            assert isinstance(deployed_datatokens, list)
+            for i, deployed_datatoken in enumerate(deployed_datatokens):
+                if isinstance(deployed_datatoken, str):
+                    deployed_datatokens[i] = data_token_map[deployed_datatoken]
+                elif isinstance(deployed_datatoken, Datatoken):
+                    pass
+
+
+        default_kwargs= dict(
+        data_nft_address = data_nft_address,
+        deployed_datatokens = deployed_datatokens,
+        datatoken_templates=[1],
+        publisher_wallet= self.ensure_wallet(kwargs.get('publisher_wallet')),
+        datatoken_minters=[self.wallet.address],
+        datatoken_fee_managers=[self.wallet.address],
+        datatoken_publish_market_order_fee_addresses=[ZERO_ADDRESS],
+        datatoken_publish_market_order_fee_amounts=[0],
+        datatoken_publish_market_order_fee_tokens=[self.ocean.OCEAN_address],
+        datatoken_bytess=[[b""]]
+        )
+
+        kwargs = self.fill_default_kwargs(kwargs=kwargs,
+                                         default_kwargs=default_kwargs)
+
+
+        asset = self.ocean.assets.create(**kwargs)
+        self.data_assets[key] = asset.did
+
+        return asset
 
     
 module = OceanModule()
 
 module.load()
 
-# module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
-# module.create_data_nft(name='DataNFT1', symbol='NFT1')
-# module.create_data_nft(name='DataNFT1', symbol='NFT2')
-# module.create_data_nft(name='DataNFT1', symbol='NFT3')
-# module.create_datatoken(name='DataToken1', symbol='DT1', data_nft='NFT1')
-# module.create_datatoken(name='DataToken1', symbol='DT2', data_nft='NFT1')
+
+module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
+module.create_data_nft(name='DataNFT1', symbol='NFT1')
+module.create_datatoken(name='DataToken1', symbol='DT1', data_nft='NFT1')
 
 st.write(module.data_tokens, module.data_nfts)
-module.save()
+
 # st.write(module.data_nfts)
 
 
+from ocean_lib.web3_internal.constants import ZERO_ADDRESS
+
+# Specify metadata and services, using the Branin test dataset
+date_created = "2021-12-28T10:55:11Z"
+
+
+metadata = {
+    "created": date_created,
+    "updated": date_created,
+    "description": "Branin dataset",
+    "name": "Branin dataset",
+    "type": "dataset",
+    "author": "Trent",
+    "license": "CC0: PublicDomain",
+}
+
+url_file = UrlFile(
+    url="https://raw.githubusercontent.com/trentmc/branin/main/branin.arff"
+)
+
+asset = module.create_asset(
+    metadata=metadata,
+    files=[url_file],
+    data_nft_symbol='NFT1',
+    deployed_datatokens=["DT1"]
+)
+
+st.write(Asset(did=asset.did).did)
+
+
+module.save()

@@ -7,4 +7,4 @@ class RecursiveNamespace:
     self.__dict__.update(kwargs)
     for k, v in kwargs.items():
         if isinstance(v, dict):
-            self.__dict__[k] = RecursiveNameSpace(**v)
+            self.__dict__[k] = RecursiveNamespace(**v)

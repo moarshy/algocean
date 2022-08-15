@@ -1,0 +1,20 @@
+
+bro : fam
+
+
+
+save:
+  data_nfts:
+    module: local
+    fn: put_object
+    params:
+      path: 'tmp/algocean/data_nfts.json'
+
+load:
+  data_nfts:
+    module: local
+    fn: get_object
+    params:
+      path: 'tmp/algocean/data_nfts.json'
+      
+    default: {}

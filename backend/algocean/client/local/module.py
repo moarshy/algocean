@@ -7,7 +7,7 @@ import os
 from typing import *
 import pickle
 LocalFileSystem.root_market = '/'
-class LocalFSModule(LocalFileSystem):
+class LocalModule(LocalFileSystem):
     default_cfg = {
     }
     def __init__(self, config=None):
@@ -32,7 +32,7 @@ class LocalFSModule(LocalFileSystem):
 
     @staticmethod
     def get_file_extension(path):
-        return os.path.splitext(path)[0]
+        return os.path.splitext(path)[1].replace('.', '')
 
     extension2mode = {
         'pkl':'pickle',
@@ -49,7 +49,7 @@ class LocalFSModule(LocalFileSystem):
 
     def resolve_mode_from_path(self, path):
         mode = self.extension2mode[self.get_file_extension(path)]
-        assert mode in supported_modes
+        assert mode in self.supported_modes
         return mode  
 
     def put_object(self, path:str, data:Any, mode:str=None):
@@ -57,14 +57,14 @@ class LocalFSModule(LocalFileSystem):
             mode = self.resolve_mode_from_path(path)
         return getattr(self, f'put_{mode}')(path=path,data=data)
 
-    def get_object(self, path:str, data:Any, mode:str=None):
+    def get_object(self, path:str, mode:str=None):
         if mode == None:
             mode = self.resolve_mode_from_path(path)
-        return getattr(self, f'get_{mode}')(path=path,data=data)
+        return getattr(self, f'get_{mode}')(path=path)
 
     def put_json(self, path, data):
             # Directly from dictionary
-        LocalFSModule.ensure_path(path)
+        self.ensure_path(path)
         if isinstance(data, dict):
             with open(path, 'w') as outfile:
                 json.dump(data, outfile)
@@ -113,7 +113,7 @@ class LocalFSModule(LocalFileSystem):
         return config
 
 if __name__ == '__main__':
-    module = LocalFSModule()
+    module = LocalModule()
     st.write(module)
     module.put_json(path='/tmp/algocean/bro.json', data={'bro': 1})
     module.put_json(path='/tmp/algocean/bro/bro.json', data={'bro': 1})

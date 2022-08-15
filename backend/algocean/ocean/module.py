@@ -1,36 +1,53 @@
 # Create Ocean instance
-from ocean_lib.example_config import ExampleConfig
-from ocean_lib.ocean.ocean import Ocean
 import streamlit as st
-import os
+import os, sys
+sys.path.append(os.getenv('PWD'))
+
+from algocean.utils import RecursiveNamespace
+from algocean.client import ClientModule
+from algocean.config.loader import ConfigLoader
+
+from ocean_lib.example_config import ExampleConfig
+from ocean_lib.web3_internal.contract_base import ContractBase
+from ocean_lib.ocean.ocean import Ocean
 from typing import *
 # Create Alice's wallet
-import os
+
 from ocean_lib.models.data_nft import DataNFT
 from ocean_lib.web3_internal.wallet import Wallet
 from ocean_lib.web3_internal.constants import ZERO_ADDRESS
+import fsspec
+
 
 
 class OceanModule:
+    default_cfg_path = 'ocean.module'
     default_wallet_key = 'default'
     wallets = {}
-    data_nfts = {}
-    data_tokens = {}
-    pkhash2wallet = {}
-    wallet2pkhash = {}
-
 
 
     def __init__(self, config=None):
-        if config == None:
-            self.config = ExampleConfig.get_config()
-        self.ocean = Ocean(self.config)
+        self.data_nfts = {}
+        self.data_tokens = {}
+        
+        self.client = self.get_clients()
+        self.config = self.get_config(config=config)
+
+        self.ocean = Ocean(self.config['ocean'])
         self.web3 = self.ocean.web3
 
-    @classmethod
-    def get_config(cls):
-        return ExampleConfig.get_config()
+        
+
+    def get_clients(self):
+        return ClientModule()
     
+    def get_config(self, config=None):
+        self.config_loader = ConfigLoader()
+        if config == None:
+            config = self.config_loader.load(path=self.default_cfg_path)
+            config['ocean'] = ExampleConfig.get_config()
+        return config
+
 
     def get_existing_wallet_key(self, private_key:str=None, address:str=None):
         for w_k, w in self.wallets.items():
@@ -44,14 +61,13 @@ class OceanModule:
         wallet_key: what is the key you want to store the wallet in
         private_key: the key itself or an env variable name pointing to that key
         '''
-        config = self.config
         # fetch the name or the key
         private_key = os.getenv(private_key, private_key)
 
         existing_wallet_key = self.get_existing_wallet_key(private_key=private_key)
         # if the key is registered, then we will swtich the old key with the new key
         if existing_wallet_key == None:
-            self.wallets[wallet_key] = Wallet(web3=self.web3, private_key=private_key, block_confirmations=config.block_confirmations, transaction_timeout=config.transaction_timeout)  
+            self.wallets[wallet_key] = Wallet(web3=self.web3, private_key=private_key, block_confirmations=self.config['ocean'].block_confirmations, transaction_timeout=self.config['ocean'].transaction_timeout)  
         else:
             self.wallets[wallet_key] =  self.wallets.pop(existing_wallet_key)
 
@@ -113,14 +129,16 @@ class OceanModule:
 
     def create_data_nft(self, name:str , symbol:str, wallet:Union[str, Wallet]=None):
         wallet = self.ensure_wallet(wallet=wallet)
-        data_nft = self.ocean.create_data_nft(name=name, symbol=symbol, from_wallet=wallet)
-        
-        self.data_nfts[symbol] = data_nft
+        data_nft = self.data_nfts.get(symbol)
+        if data_nft == None:
+            data_nft = self.ocean.create_data_nft(name=name, symbol=symbol, from_wallet=wallet)
+            self.data_nfts[symbol] = data_nft
+
         return data_nft
 
     def ensure_data_nft(self, data_nft:Union[str, DataNFT]): 
         if isinstance(data_nft, str):
-            return self.data_nft[data_nft]
+            return DataNFT(web3=self.web3, address=self.data_nft[data_nft])
         elif isinstance(data_nft, DataNFT):
             return data_nft
         else:
@@ -132,13 +150,58 @@ class OceanModule:
     def create_datatoken(self, name:str, symbol:str, data_nft:Union[str, DataNFT]=None, wallet:Union[str, Wallet]=None):
         wallet = self.ensure_wallet(wallet)
         data_nft = self.ensure_data_nft(data_nft)
-        
+
+
+    def get_contract(self, address:str, contract_class=ContractBase):
+        return contract_class(web3=self.web3, address=address)
+    
+    def get_address(self, contract):
+        return contract.address
+
+    def load(self):
+        self.load_state()
+        # some loading post processing
+        for nft_k,nft_address in self.data_nfts.items():
+            self.data_nfts[nft_k] = self.get_contract(address=nft_address, contract_class=DataNFT)
+
+
+    def load_state(self):
+        for k, v in self.config['load'].items():
+            load_fn = getattr(getattr(self.client, v['module']), v['fn'])
+            data = load_fn(**v['params'])
+            if data == None:
+                data = v.get('default', data)
+            self.__dict__[k] = data
+
+
+
+    def save(self):
+        # some loading post processing
+        for nft_k,nft in self.data_nfts.items():
+            self.data_nfts[nft_k] = self.get_address(contract=nft)
+        self.save_state()
+
+    def save_state(self):
+        for k, v in self.config['save'].items():
+
+            data = self.__dict__[k]
+            save_fn = getattr(getattr(self.client, v['module']), v['fn'])
+            save_fn(**v['params'], data=data)
+
+
     
 module = OceanModule()
 
+module.load()
+
 module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
-
 module.create_data_nft(name='DataNFT1', symbol='NFT1')
-
+module.create_data_nft(name='DataNFT1', symbol='NFT2')
+module.create_data_nft(name='DataNFT1', symbol='NFT3')
+module.create_data_nft(name='DataNFT1', symbol='NFT4')
+# st.write(module.data_nfts)
 st.write(module.data_nfts)
+module.save()
+st.write(module.data_nfts)
+
 

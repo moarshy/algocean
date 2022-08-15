@@ -3,12 +3,13 @@ import streamlit as st
 import os, sys
 sys.path.append(os.getenv('PWD'))
 
-from algocean.utils import RecursiveNamespace
+from algocean.utils import RecursiveNamespace, dict_put, dict_has
 from algocean.client import ClientModule
 from algocean.config.loader import ConfigLoader
 
 from ocean_lib.example_config import ExampleConfig
 from ocean_lib.web3_internal.contract_base import ContractBase
+from ocean_lib.models.datatoken import Datatoken
 from ocean_lib.ocean.ocean import Ocean
 from typing import *
 # Create Alice's wallet
@@ -129,16 +130,18 @@ class OceanModule:
 
     def create_data_nft(self, name:str , symbol:str, wallet:Union[str, Wallet]=None):
         wallet = self.ensure_wallet(wallet=wallet)
-        data_nft = self.data_nfts.get(symbol)
+
+        nft_key =  symbol
+        data_nft = self.data_nfts.get(nft_key)
         if data_nft == None:
             data_nft = self.ocean.create_data_nft(name=name, symbol=symbol, from_wallet=wallet)
-            self.data_nfts[symbol] = data_nft
+            self.data_nfts[nft_key] = data_nft
 
         return data_nft
 
     def ensure_data_nft(self, data_nft:Union[str, DataNFT]): 
         if isinstance(data_nft, str):
-            return DataNFT(web3=self.web3, address=self.data_nft[data_nft])
+            return self.data_nfts[data_nft]
         elif isinstance(data_nft, DataNFT):
             return data_nft
         else:
@@ -151,6 +154,18 @@ class OceanModule:
         wallet = self.ensure_wallet(wallet)
         data_nft = self.ensure_data_nft(data_nft)
 
+        nft_symbol = data_nft.symbol()
+        key = '.'.join([nft_symbol, symbol])
+
+        data_token = self.data_tokens.get(key)
+
+        if data_token == None:
+            datatoken = data_nft.create_datatoken(name=name, symbol=symbol, from_wallet=wallet)
+            
+            self.data_tokens[key] = datatoken
+        
+        return self.data_tokens[key]
+
 
     def get_contract(self, address:str, contract_class=ContractBase):
         return contract_class(web3=self.web3, address=address)
@@ -161,8 +176,10 @@ class OceanModule:
     def load(self):
         self.load_state()
         # some loading post processing
-        for nft_k,nft_address in self.data_nfts.items():
-            self.data_nfts[nft_k] = self.get_contract(address=nft_address, contract_class=DataNFT)
+        for k,v in self.data_nfts.items():
+            self.data_nfts[k] = self.get_contract(address=v, contract_class=DataNFT)
+        for k,v in self.data_tokens.items():
+            self.data_tokens[k] = self.get_contract(address=v, contract_class=Datatoken)
 
 
     def load_state(self):
@@ -177,8 +194,11 @@ class OceanModule:
 
     def save(self):
         # some loading post processing
-        for nft_k,nft in self.data_nfts.items():
-            self.data_nfts[nft_k] = self.get_address(contract=nft)
+        for k,v in self.data_nfts.items():
+            self.data_nfts[k] = self.get_address(contract=v)
+        for k,v in self.data_tokens.items():
+            self.data_tokens[k] = self.get_address(contract=v)
+
         self.save_state()
 
     def save_state(self):
@@ -194,14 +214,15 @@ module = OceanModule()
 
 module.load()
 
-module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
-module.create_data_nft(name='DataNFT1', symbol='NFT1')
-module.create_data_nft(name='DataNFT1', symbol='NFT2')
-module.create_data_nft(name='DataNFT1', symbol='NFT3')
-module.create_data_nft(name='DataNFT1', symbol='NFT4')
-# st.write(module.data_nfts)
-st.write(module.data_nfts)
+# module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
+# module.create_data_nft(name='DataNFT1', symbol='NFT1')
+# module.create_data_nft(name='DataNFT1', symbol='NFT2')
+# module.create_data_nft(name='DataNFT1', symbol='NFT3')
+# module.create_datatoken(name='DataToken1', symbol='DT1', data_nft='NFT1')
+# module.create_datatoken(name='DataToken1', symbol='DT2', data_nft='NFT1')
+
+st.write(module.data_tokens, module.data_nfts)
 module.save()
-st.write(module.data_nfts)
+# st.write(module.data_nfts)
 
 

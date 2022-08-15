@@ -10,11 +10,26 @@ save:
     params:
       path: 'tmp/algocean/data_nfts.json'
 
+
+  data_tokens:
+    module: local
+    fn: put_object
+    params:
+      path: 'tmp/algocean/data_tokens.json'
+
 load:
   data_nfts:
     module: local
     fn: get_object
     params:
       path: 'tmp/algocean/data_nfts.json'
+
+    default: {}
+
+  data_tokens:
+    module: local
+    fn: get_object
+    params:
+      path: 'tmp/algocean/data_tokens.json'
       
     default: {}

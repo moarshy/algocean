@@ -11,7 +11,7 @@ import torch
 import ray
 from commune.utils.misc import dict_put
 
-class HFModule(BaseProcess):
+class ModelModule(BaseProcess):
     default_cfg_path= 'commune.huggingface.base.module'
 
     def __init__(self, cfg):

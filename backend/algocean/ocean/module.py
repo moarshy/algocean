@@ -282,7 +282,6 @@ class OceanModule(BaseModule):
         data_nft_symbol = data_nft.symbol()
         data_nft_address = data_nft.address
 
-        st.write(data_nft_symbol)
 
         key = data_nft_symbol
 
@@ -467,12 +466,14 @@ class OceanModule(BaseModule):
     
 module = OceanModule()
 
-module.load()
-module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
-module.create_data_nft(name='DataNFT1', symbol='NFT1')
-module.create_datatoken(name='DataToken1', symbol='DT1', data_nft='NFT1')
+# module.load()
 
-# st.write(module.data_nfts)
+module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
+st.write(module.wallets, 'WALLETS')
+module.create_data_nft(name='DataNFT1', symbol='NFT1')
+st.write(module.data_nfts, 'DATA_NFTS')
+module.create_datatoken(name='DataToken1', symbol='DT1', data_nft='NFT1')
+st.write(module.data_tokens, 'DATA_NFTS')
 
 
 
@@ -497,7 +498,6 @@ asset = module.create_asset(
     data_token="DT1"
 )
 
-st.write(asset.services, 'services')
 # Initialize Bob's wallet
 bob_wallet = module.generate_wallet(private_key='TEST_PRIVATE_KEY2')
 print(f"bob_wallet.address = '{bob_wallet.address}'")
@@ -508,8 +508,6 @@ module.mint(
     account=bob_wallet.address, # can pass bobs wallet or address
     value=50
 )
-
-st.write(module.get_balance(data_token='NFT1.DT1', account=bob_wallet.address))
 
 
 # Verify that Bob has ganache ETH
@@ -538,6 +536,5 @@ elif get_asset_option == 2:
         order_tx_id=order_tx_id
     )
 
-# st.write(asset.services[0].__dict__)
 
 # module.save()

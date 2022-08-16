@@ -13,7 +13,7 @@ from ocean_lib.web3_internal.contract_base import ContractBase
 from ocean_lib.models.datatoken import Datatoken
 from ocean_lib.ocean.ocean import Ocean
 from ocean_lib.structures.file_objects import IpfsFile, UrlFile
-
+from ocean_lib.services.service import Service
 from typing import *
 # Create Alice's wallet
 
@@ -104,12 +104,6 @@ class OceanModule:
         else:
             return  [(k,v) for k,v in self.wallets.items()]
 
-    def get_wallet(self, wallet_key:str, handle_key_error=False):
-        if handle_key_error:
-            return self.wallets.get(wallet_key, None)
-        else:
-            return self.wallets[wallet_key]
-
     @property
     def wallet(self):
         # gets the default wallet
@@ -128,7 +122,7 @@ class OceanModule:
                 self.default_wallet_key = 'default'
 
 
-    def ensure_wallet(self, wallet):
+    def get_wallet(self, wallet, return_address=False):
         if wallet == None:
             wallet = self.wallet
         elif isinstance(wallet, str):
@@ -138,10 +132,15 @@ class OceanModule:
         else:
             raise Exception(f'Bro, the wallet {wallet} does not exist or is not supported')
 
-        return wallet
+        assert isinstance(wallet, Wallet), f'wallet is not of type Wallet but  is {Wallet}'
+    
+        if return_address:
+            return wallet.address
+        else: 
+            return wallet
 
     def create_data_nft(self, name:str , symbol:str, wallet:Union[str, Wallet]=None):
-        wallet = self.ensure_wallet(wallet=wallet)
+        wallet = self.get_wallet(wallet=wallet)
 
         nft_key =  symbol
         data_nft = self.data_nfts.get(nft_key)
@@ -163,7 +162,7 @@ class OceanModule:
         return list(self.data_nfts.keys())
 
     def create_datatoken(self, name:str, symbol:str, data_nft:Union[str, DataNFT]=None, wallet:Union[str, Wallet]=None):
-        wallet = self.ensure_wallet(wallet)
+        wallet = self.get_wallet(wallet)
         data_nft = self.ensure_data_nft(data_nft)
 
         nft_symbol = data_nft.symbol()
@@ -209,11 +208,14 @@ class OceanModule:
     # def get_asset_did(asset:Asset):
     #     return asset.did
 
-    def get_asset(self, did:str=None, data_nft:str=None) -> Asset:
-        if did != None:
-            return Asset(did=did)
-        elif data_nft != None:
-            return self.data_assets[data_nft]
+    def get_asset(self, asset) -> Asset:
+        if isinstance(asset, Asset):
+            return asset
+        if asset in self.data_assets:
+            return self.data_assets[asset]
+        else:
+            return Asset(did=asset)
+
 
     def save(self):
         # some loading post processing
@@ -301,7 +303,7 @@ class OceanModule:
         data_nft_address = data_nft_address,
         deployed_datatokens = deployed_datatokens,
         datatoken_templates=[1],
-        publisher_wallet= self.ensure_wallet(kwargs.get('publisher_wallet')),
+        publisher_wallet= self.get_wallet(kwargs.get('publisher_wallet')),
         datatoken_minters=[self.wallet.address],
         datatoken_fee_managers=[self.wallet.address],
         datatoken_publish_market_order_fee_addresses=[ZERO_ADDRESS],
@@ -349,7 +351,7 @@ class OceanModule:
 
 
     def mint(self, account_address:str, value:int=1,data_nft:str=None, data_token:str=None, token_address:str=None, wallet:Wallet=None , encode_value=True):
-        wallet = self.ensure_wallet(wallet=wallet)
+        wallet = self.get_wallet(wallet=wallet)
         if encode_value:
             value = self.ocean.to_wei(str(value))
         datatoken = self.get_datatoken(data_nft=data_nft,data_token=data_token, address=token_address)
@@ -368,8 +370,8 @@ class OceanModule:
 
         elif data_nft != None or data_token != None:
             data_tokens_map = self.list_data_tokens(data_nft=data_nft)
-            if data_token in data_tokens_map:
-                return data_tokens_map[data_token]
+            assert data_token in data_tokens_map, f'{data_token} not in {list(data_tokens_map.keys())}'
+            return data_tokens_map[data_token]
 
         return None
 
@@ -377,7 +379,7 @@ class OceanModule:
         '''
         resolves the account to default wallet if account is None
         '''
-        
+    
         account = self.wallet if account == None else account
 
         if return_address:
@@ -394,19 +396,79 @@ class OceanModule:
 
         data_token = self.get_datatoken(data_nft=data_nft, data_token=data_token, address=token_address)
         if data_token == None:
-            return self.web3.eth.get_balance(account_address)
+            value =  self.web3.eth.get_balance(account_address)
         else:
-            return data_token.balanceOf(account_address)
+            value =  data_token.balanceOf(account_address)
         
+        return value
+        
+    def list_services(self, asset):
+        asset = self.get_asset(asset)
+        return asset.services
 
+    def get_service(self, asset, service=None):
+        if isinstance(service, Service):
+            return service
+        asset = self.get_asset(asset)
+        if service == None:
+            return asset.services[0]
+        elif isinstance(service, int):
+            return asset.services[service]
+        else:
+            raise NotImplementedError
         
+    def pay_for_access_service(self,
+                              asset,
+                              service=None,
+                              consume_market_order_fee_address=None,
+                              consume_market_order_fee_token=None,
+                              consume_market_order_fee_amount=0,
+                              wallet=None, **kwargs):
+        asset = self.get_asset(asset=asset)
+        service= self.get_service(asset=asset, service=service)
+        wallet = self.get_wallet(wallet=wallet) 
+
+        if consume_market_order_fee_token is None:
+            consume_market_order_fee_token = service.datatoken
+        if consume_market_order_fee_address is None:
+            consume_market_order_fee_address = wallet.address
         
+        default_kargs = dict(
+            asset=asset,
+            service=service,
+            consume_market_order_fee_address=consume_market_order_fee_address,
+            consume_market_order_fee_token=consume_market_order_fee_token,
+            consume_market_order_fee_amount=consume_market_order_fee_amount,
+            wallet=wallet,
+        )
+
+        order_tx_id = self.ocean.assets.pay_for_access_service(
+            **default_kargs, **kwargs
+        )     
+
+        return order_tx_id   
+        
+    def download_asset(self, wallet, asset, service=None, destination='./', order_tx_id=None ):
+        asset = self.get_asset(asset=asset)
+        service= self.get_service(asset=asset, service=service)
+        wallet = self.get_wallet(wallet=wallet) 
+
+        if order_tx_id == None:
+            order_tx_id = self.pay_for_access_service(asset=asset, service=service, wallet=wallet)
+
+        file_path = self.ocean.assets.download_asset(
+                                        asset=asset,
+                                        service=service,
+                                        consumer_wallet=wallet,
+                                        destination=destination,
+                                        order_tx_id=order_tx_id
+                                    )
+        return file_path
         
     
 module = OceanModule()
 
 # module.load()
-
 
 module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
 module.create_data_nft(name='DataNFT1', symbol='NFT1')
@@ -440,7 +502,6 @@ asset = module.create_asset(
     data_token="DT1"
 )
 
-
 # Initialize Bob's wallet
 bob_wallet = module.generate_wallet(private_key='TEST_PRIVATE_KEY2')
 print(f"bob_wallet.address = '{bob_wallet.address}'")
@@ -463,26 +524,22 @@ module.get_balance(account=bob_wallet.address) > 0, "need ganache ETH"
 # fee_receiver = ZERO_ADDRESS  # could also be market address
 # service = asset.services[0]
 
-# # Bob sends his datatoken to the service
-# order_tx_id = module.ocean.assets.pay_for_access_service(
-#     asset=asset,
-#     service=service,
-#     consume_market_order_fee_address=bob_wallet.address,
-#     consume_market_order_fee_token=datatoken.address,
-#     consume_market_order_fee_amount=0,
+st.write(asset.services[0].__dict__)
+
+# # # Bob sends his datatoken to the service
+# order_tx_id = module.pay_for_access_service(
+#     asset='NFT1',
 #     wallet=bob_wallet,
 # )
-# print(f"order_tx_id = '{order_tx_id}'")
+# st.write(f"order_tx_id = '{order_tx_id}'")
 
 # # Bob downloads. If the connection breaks, Bob can request again by showing order_tx_id.
-# file_path = module.ocean.assets.download_asset(
-#     asset=asset,
-#     service=service,
-#     consumer_wallet=bob_wallet,
-#     destination='./',
-#     order_tx_id=order_tx_id
-# )
-# print(f"file_path = '{file_path}'")
+file_path = module.download_asset(
+    asset=asset,
+    wallet=bob_wallet,
+    destination='./',
+)
+st.write(f"file_path = '{file_path}'")
 
 # st.write(asset.services[0].__dict__)
 

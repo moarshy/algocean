@@ -7,13 +7,13 @@ from copy import deepcopy
 import 
 from typing import Union
 
-from commune.process.base import BaseProcess
+from algocean import BaseModule
 import torch
 import ray
 from commune.utils.misc import dict_put
 
-class DatasetModule(BaseProcess):
-    default_cfg_path= 'commune.huggingface.dataset.module'
+class DatasetModule(BaseModule):
+    default_cfg_path= 'algocean.huggingface.dataset.module'
 
     def __init__(self, cfg=None):
         BaseProcess.__init__(self, cfg=Module)
@@ -148,7 +148,7 @@ class DatasetModule(BaseProcess):
 
 if __name__ == '__main__':
     with ray.init(address="auto",namespace="commune"):
-        model = ModelModule.deploy(actor={'refresh': False})
+        model = DatasetModule.deploy(actor={'refresh': False})
         sentences = ['ray.get(model.encode.remote(sentences))', 'ray.get(model.encoder.remote(sentences)) # whadup fam']
         print(ray.get(model.self_similarity.remote(sentences)))
 

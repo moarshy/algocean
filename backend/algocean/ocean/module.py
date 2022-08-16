@@ -468,13 +468,10 @@ module = OceanModule()
 
 # module.load()
 
-module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
-st.write(module.wallets, 'WALLETS')
+module.add_wallet(wallet_key='alice', private_key=os.getenv('TEST_PRIVATE_KEY1'))
+module.add_wallet(wallet_key='bob', private_key=os.getenv('TEST_PRIVATE_KEY2'))
 module.create_data_nft(name='DataNFT1', symbol='NFT1')
-st.write(module.data_nfts, 'DATA_NFTS')
 module.create_datatoken(name='DataToken1', symbol='DT1', data_nft='NFT1')
-st.write(module.data_tokens, 'DATA_NFTS')
-
 
 
 # Specify metadata and services, using the Branin test dataset

@@ -1,0 +1,16 @@
+
+module: huggingface.DatasetModule
+
+
+dataset: 'squad'
+pipeline: 
+  - 
+    tokenizer: 'bert-base-cased'
+    params:
+      padding: max_length
+      truncation: True 
+
+metric: ['squad']
+
+
+client: get_cfg(client.manager)

@@ -48,3 +48,6 @@ load:
       path: 'tmp/algocean/data_assets.json'
       
     default: {}
+
+  
+client: {}

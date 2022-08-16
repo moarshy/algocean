@@ -4,8 +4,6 @@ import os, sys
 sys.path.append(os.getenv('PWD'))
 
 from algocean.utils import RecursiveNamespace, dict_put, dict_has
-from algocean.client import ClientModule
-from algocean.config.loader import ConfigLoader
 
 from ocean_lib.assets.asset import Asset
 from ocean_lib.example_config import ExampleConfig
@@ -23,38 +21,27 @@ from ocean_lib.web3_internal.constants import ZERO_ADDRESS
 import fsspec
 
 from ocean_lib.structures.file_objects import UrlFile
+from algocean import BaseModule
+# from algocean import BaseModule
 
 
-
-class OceanModule:
+class OceanModule(BaseModule):
     default_cfg_path = 'ocean.module'
     default_wallet_key = 'default'
     wallets = {}
-
-
     def __init__(self, config=None):
+        BaseModule.__init__(self, config=config)
+        
         self.data_nfts = {}
         self.data_tokens = {}
         self.data_assets = {}
-        
-        self.client = self.get_clients()
-        self.config = self.get_config(config=config)
 
+        if self.config.get('ocean') == None:
+            self.config['ocean'] = ExampleConfig.get_config()
+        
         self.ocean = Ocean(self.config['ocean'])
         self.web3 = self.ocean.web3
-
-        
-
-    def get_clients(self):
-        return ClientModule()
     
-    def get_config(self, config=None):
-        self.config_loader = ConfigLoader()
-        if config == None:
-            config = self.config_loader.load(path=self.default_cfg_path)
-            config['ocean'] = ExampleConfig.get_config()
-        return config
-
 
     def get_existing_wallet_key(self, private_key:str=None, address:str=None):
         for w_k, w in self.wallets.items():
@@ -211,10 +198,16 @@ class OceanModule:
     def get_asset(self, asset) -> Asset:
         if isinstance(asset, Asset):
             return asset
-        if asset in self.data_assets:
-            return self.data_assets[asset]
-        else:
-            return Asset(did=asset)
+        elif isinstance(asset, str):
+            if asset.startswith('did:op:') :
+                # is it a did
+                return Asset(did=asset)
+            else:
+                # is it a key in sel.f
+                assert asset in self.data_assets, f'Broooo: if you want to get the asset, your options are {list(self.data_assets.keys())}'
+                return  self.data_assets[asset]
+
+        
 
 
     def save(self):
@@ -331,7 +324,8 @@ class OceanModule:
             return list(self.data_assets.keys())
     
     @staticmethod
-    def get_file_obj(file_obj:dict, file_type:str=None):
+    def get_file_obj(file_obj:Union[dict,list], file_type:str=None):
+
         file_type_options = ['url', 'ipfs'] 
         file_obj['type'] = file_obj.get('type', file_type)
         
@@ -350,8 +344,12 @@ class OceanModule:
             raise Exception("Unrecognized file type")
 
 
-    def mint(self, account_address:str, value:int=1,data_nft:str=None, data_token:str=None, token_address:str=None, wallet:Wallet=None , encode_value=True):
+    def mint(self, account:Union[str,Wallet], value:int=1,data_nft:str=None, data_token:str=None, token_address:str=None, wallet:Wallet=None , encode_value=True):
         wallet = self.get_wallet(wallet=wallet)
+
+        
+        account_address = self.resolve_account(account=account, return_address=True)
+
         if encode_value:
             value = self.ocean.to_wei(str(value))
         datatoken = self.get_datatoken(data_nft=data_nft,data_token=data_token, address=token_address)
@@ -379,6 +377,7 @@ class OceanModule:
         '''
         resolves the account to default wallet if account is None
         '''
+
     
         account = self.wallet if account == None else account
 
@@ -468,22 +467,17 @@ class OceanModule:
     
 module = OceanModule()
 
-# module.load()
-
+module.load()
 module.add_wallet(wallet_key='alice', private_key='TEST_PRIVATE_KEY1')
 module.create_data_nft(name='DataNFT1', symbol='NFT1')
 module.create_datatoken(name='DataToken1', symbol='DT1', data_nft='NFT1')
 
-
 # st.write(module.data_nfts)
 
 
-from ocean_lib.web3_internal.constants import ZERO_ADDRESS
 
 # Specify metadata and services, using the Branin test dataset
 date_created = "2021-12-28T10:55:11Z"
-
-
 metadata = {
     "created": date_created,
     "updated": date_created,
@@ -494,6 +488,7 @@ metadata = {
     "license": "CC0: PublicDomain",
 }
 url_file = module.get_file_obj(dict(url="https://raw.githubusercontent.com/trentmc/branin/main/branin.arff", type='url'))
+# url_file = module.get_file_obj(dict(hash="QmQwhnitZWNrVQQ1G8rL4FRvvZBUvHcxCtUreskfnBzvD8", type='ipfs'))
 
 asset = module.create_asset(
     metadata=metadata,
@@ -502,6 +497,7 @@ asset = module.create_asset(
     data_token="DT1"
 )
 
+st.write(asset.services, 'services')
 # Initialize Bob's wallet
 bob_wallet = module.generate_wallet(private_key='TEST_PRIVATE_KEY2')
 print(f"bob_wallet.address = '{bob_wallet.address}'")
@@ -509,7 +505,7 @@ print(f"bob_wallet.address = '{bob_wallet.address}'")
 # Alice mints a datatoken into Bob's wallet
 module.mint(
     data_token='NFT1.DT1',
-    account_address=bob_wallet.address,
+    account=bob_wallet.address, # can pass bobs wallet or address
     value=50
 )
 
@@ -519,27 +515,28 @@ st.write(module.get_balance(data_token='NFT1.DT1', account=bob_wallet.address))
 # Verify that Bob has ganache ETH
 module.get_balance(account=bob_wallet.address) > 0, "need ganache ETH"
 
-# Bob points to the service object
-
-# fee_receiver = ZERO_ADDRESS  # could also be market address
-# service = asset.services[0]
-
-st.write(asset.services[0].__dict__)
-
-# # # Bob sends his datatoken to the service
-# order_tx_id = module.pay_for_access_service(
-#     asset='NFT1',
-#     wallet=bob_wallet,
-# )
-# st.write(f"order_tx_id = '{order_tx_id}'")
+# two options of paying
+get_asset_option = 2
 
 # # Bob downloads. If the connection breaks, Bob can request again by showing order_tx_id.
-file_path = module.download_asset(
-    asset=asset,
-    wallet=bob_wallet,
-    destination='./',
-)
-st.write(f"file_path = '{file_path}'")
+if get_asset_option == 1:
+    file_path = module.download_asset(
+        asset='NFT1',
+        wallet=bob_wallet,
+        destination='./')
+elif get_asset_option == 2:
+
+    order_tx_id = module.pay_for_access_service(
+        asset='NFT1',
+        wallet=bob_wallet,
+    )
+
+    file_path = module.download_asset(
+        asset='NFT1',
+        wallet=bob_wallet,
+        destination='./',
+        order_tx_id=order_tx_id
+    )
 
 # st.write(asset.services[0].__dict__)
 

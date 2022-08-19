@@ -29,9 +29,9 @@ spec:
         - name: AQUARIUS_BIND_URL
           value: http://0.0.0.0:5000
         - name: AQUARIUS_WORKERS
-          value: "8"
+          value: "2"
         - name: DB_HOSTNAME
-          value: elasticsearch-master:9200
+          value: elasticsearch-master
         - name: DB_MODULE
           value: elasticsearch
         - name: DB_NAME
@@ -40,23 +40,35 @@ spec:
           value: "9200"
         - name: DB_SCHEME
           value: http
-        - name: DB_USERNAME
-          value: elastic
-        - name: DB_PASSWORD
-          value: changeme
+        # - name: DB_USERNAME
+        #   value: elastic
+        # - name: DB_PASSWORD
+        #   value: changeme
         - name: DB_SSL
           value: "false"
         - name: RUN_AQUARIUS_SERVER
           value: "1"
         - name: RUN_EVENTS_MONITOR
-          value: "0"
+          value: "1"
         - name: EVENTS_ALLOW
           value: "0"
         - name: CONFIG_FILE
           value: config.ini
-        - name: ALLOWED_PUBLISHERS
-          value: '[""]'
-        image: oceanprotocol/aquarius:v3.0.1
+        - name: EVENTS_RPC
+          value: 'https://rinkeby.infura.io/v3/5b10c1d10f19480dbb33a6150242c125'
+        - name: BFACTORY_BLOCK
+          value: "7298806"
+        - name: METADATA_CONTRACT_BLOCK
+          value: "7298808"
+        - name: NETWORK_NAME
+          value: 'rinkeby'
+        - name: OCEAN_ADDRESS
+          value: 0x8967BCF84170c91B0d24D4302C2376283b0B3a07
+        - name: BLOCKS_CHUNK_SIZE
+          value: "5000"
+        - name: EVENTS_HTTP
+          value: '1'
+        image: oceanprotocol/aquarius:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -99,7 +111,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: aq-service
+  name: aq-service-lb
 spec:
   selector:
     app: aquarius
@@ -108,3 +120,17 @@ spec:
       port: 5000
       targetPort: 5000
   type: LoadBalancer
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aq-service-cip
+spec:
+  selector:
+    app: aquarius
+  ports:
+    - protocol: TCP
+      port: 5001
+      targetPort: 5000
+  type: ClusterIP

@@ -24,7 +24,10 @@ spec:
       containers:
       - env:
         - name: NETWORK_URL
-          value: https://mainnet.infura.io/v3/5b10c1d10f19480dbb33a6150242c125
+          # value: https://mainnet.infura.io/v3/5b10c1d10f19480dbb33a6150242c125
+          value: https://rinkeby.infura.io/v3/5b10c1d10f19480dbb33a6150242c125
+        - name: NETWORK_NAME
+          value: rinkeby
         - name: PROVIDER_PRIVATE_KEY
           value: 0xc594c6e5def4bab63ac29eed19a134c130388f74f019bc74b8f4389df2837a58
         - name: LOG_LEVEL
@@ -38,7 +41,7 @@ spec:
         - name: OCEAN_PROVIDER_TIMEOUT
           value: "9000"
         - name: AQUARIUS_URL
-          value: aq-service:5000 #https://aquarius.marketplace.dev-ocean.com
+          value: aq-service-cip #https://aquarius.marketplace.dev-ocean.com
         image: oceanprotocol/provider-py:latest
         name: provider
         ports:
@@ -55,7 +58,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: provider-service
+  name: provider-service-lb
 spec:
   selector:
     app: provider
@@ -64,3 +67,17 @@ spec:
       port: 8030
       targetPort: 8030
   type: LoadBalancer
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: provider-service-cip
+spec:
+  selector:
+    app: provider
+  ports:
+    - protocol: TCP
+      port: 8031
+      targetPort: 8030
+  type: ClusterIP

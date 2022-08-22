@@ -25,7 +25,7 @@ spec:
       - env:
         - name: NETWORK_URL
           # value: https://mainnet.infura.io/v3/5b10c1d10f19480dbb33a6150242c125
-          value: https://rinkeby.infura.io/v3/5b10c1d10f19480dbb33a6150242c125
+          value: https://eth-rinkeby.alchemyapi.io/v2/NHpey9AytT37TQ4NRM2wngTkd8hxxrN9
         - name: NETWORK_NAME
           value: rinkeby
         - name: PROVIDER_PRIVATE_KEY
@@ -58,7 +58,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: provider-service-lb
+  name: provider-service-np
 spec:
   selector:
     app: provider
@@ -66,7 +66,7 @@ spec:
     - protocol: TCP
       port: 8030
       targetPort: 8030
-  type: LoadBalancer
+  type: NodePort
 
 ---
 apiVersion: v1

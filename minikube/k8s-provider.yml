@@ -25,7 +25,7 @@ spec:
       - env:
         - name: NETWORK_URL
           # value: https://mainnet.infura.io/v3/5b10c1d10f19480dbb33a6150242c125
-          value: https://eth-rinkeby.alchemyapi.io/v2/NHpey9AytT37TQ4NRM2wngTkd8hxxrN9
+          value: xxxxxxxx
         - name: NETWORK_NAME
           value: rinkeby
         - name: PROVIDER_PRIVATE_KEY

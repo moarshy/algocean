@@ -55,7 +55,7 @@ spec:
         - name: CONFIG_FILE
           value: config.ini
         - name: EVENTS_RPC
-          value: 'https://eth-rinkeby.alchemyapi.io/v2/NHpey9AytT37TQ4NRM2wngTkd8hxxrN9'
+          value: xxxxxx
         - name: BFACTORY_BLOCK
           value: "7298806"
         - name: METADATA_CONTRACT_BLOCK
